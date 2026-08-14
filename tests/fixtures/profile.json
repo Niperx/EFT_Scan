@@ -1,0 +1,52 @@
+{
+  "aid": 6976458,
+  "info": {
+    "nickname": "PoeBwo-TTV",
+    "side": "Bear",
+    "experience": 52496023,
+    "memberCategory": 1026,
+    "selectedMemberCategory": 0,
+    "prestigeLevel": 6
+  },
+  "skills": {
+    "Common": [
+      {"Id": "Health", "Progress": 4163, "LastAccess": 1785639642},
+      {"Id": "BotReload", "Progress": 0, "LastAccess": -2147483648}
+    ]
+  },
+  "pmcStats": {
+    "eft": {
+      "totalInGameTime": 53359728,
+      "overAllCounters": {
+        "Items": [
+          {"Key": ["Sessions", "Pmc"], "Value": 5055},
+          {"Key": ["ExitStatus", "Survived", "Pmc"], "Value": 2003},
+          {"Key": ["Kills"], "Value": 26011},
+          {"Key": ["Deaths"], "Value": 2751},
+          {"Key": ["KilledPmc"], "Value": 6317},
+          {"Key": ["LongestWinStreak", "Pmc"], "Value": 13},
+          {"Key": ["ExitStatus", "Killed", "Pmc"], "Value": 2748},
+          {"Key": ["ExitStatus", "Runner", "Pmc"], "Value": 80}
+        ]
+      }
+    }
+  },
+  "scavStats": {
+    "eft": {
+      "totalInGameTime": 53359728,
+      "overAllCounters": {
+        "Items": [
+          {"Key": ["Sessions", "Scav"], "Value": 5},
+          {"Key": ["ExitStatus", "Killed", "Scav"], "Value": 3},
+          {"Key": ["Kills"], "Value": 14},
+          {"Key": ["Deaths"], "Value": 3},
+          {"Key": ["KilledPmc"], "Value": 1},
+          {"Key": ["ExitStatus", "Survived", "Scav"], "Value": 2},
+          {"Key": ["LongestWinStreak", "Scav"], "Value": 1}
+        ]
+      }
+    }
+  },
+  "achievements": {"a": 1, "b": 2},
+  "updated": 1785652646479
+}

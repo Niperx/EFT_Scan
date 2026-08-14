@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eft-scan"
+version = "1.0.0"
+description = "Telegram-бот со статистикой игроков Escape from Tarkov через tarkov.dev"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "python-telegram-bot[job-queue]==22.8",
+  "httpx==0.28.1",
+  "python-dotenv==1.1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.1",
+  "pytest-asyncio==1.1.0",
+]
+
+[project.scripts]
+eft-scan = "eft_scan.__main__:main"
+eft-scan-lookup = "eft_scan.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+eft_scan = ["data/*.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+testpaths = ["tests"]
