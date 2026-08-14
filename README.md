@@ -20,13 +20,15 @@ Telegram-бот для статистики игрока Escape from Tarkov по
 Бесплатный веб-сервис Render: 512 МБ RAM, HTTPS, деплой из GitHub. Раз в 15 минут без запросов сервис засыпает; первое сообщение после сна может идти около минуты (пока Render будит контейнер). Пока ботом пользуются, он отвечает сразу.
 
 1. Зайдите на [render.com](https://render.com) с телефона → **Sign up / Log in** через GitHub и разрешите доступ к репозиторию `Niperx/EFT_Scan`.
-2. **New** → **Blueprint** (или **Web Service**).
-3. Выберите репозиторий `EFT_Scan`. Ветку — `main` после мержа, либо текущую `cursor/telegram-player-bot-b21b`.
-4. Runtime: **Docker**. Команда запуска уже в Dockerfile: `python -m eft_scan`.
+2. **New** → **Web Service**.
+3. Репозиторий `EFT_Scan`. **Branch обязательно** `cursor/telegram-player-bot-b21b` — на `main` пока нет Dockerfile, из‑за этого Render пишет `open Dockerfile: no such file or directory`.
+4. Runtime: **Docker**. Dockerfile Path: `Dockerfile` (в корне репозитория). Root Directory оставьте пустым.
 5. **Environment** → Add: имя `TELEGRAM_BOT_TOKEN`, значение — токен из BotFather. Вставьте и сохраните.
-6. **Create Web Service** / **Apply**.
+6. **Create Web Service**.
 7. Дождитесь статуса **Live**. Откройте URL вида `https://….onrender.com/health` — должно быть `ok`.
 8. В Telegram напишите боту `/start`.
+
+Если сервис уже создан с ветки `main`: Settings → Build & Deploy → Branch → `cursor/telegram-player-bot-b21b` → Save → Manual Deploy.
 
 Публичный URL Render подхватится сам (`RENDER_EXTERNAL_URL`), бот включит webhook.
 

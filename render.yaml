@@ -3,6 +3,8 @@ services:
     name: eft-scan
     runtime: docker
     plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       - key: TELEGRAM_BOT_TOKEN
