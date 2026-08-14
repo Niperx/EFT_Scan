@@ -6,7 +6,7 @@ from dataclasses import dataclass
 NICKNAME_RE = re.compile(r"^(?:[A-Za-z0-9-_]{3,15}|TarkovCitizen\d{1,10})$")
 NICKNAME_CHARS_RE = re.compile(r"^[A-Za-z0-9-_]+$")
 COMMAND_RE = re.compile(
-    r"^/(player|pve|pvp|regular)(?:@([A-Za-z0-9_]+))?(?:\s+|$)",
+    r"^/(player|pve|pvp|regular|season)(?:@([A-Za-z0-9_]+))?(?:\s+|$)",
     re.IGNORECASE,
 )
 
@@ -14,13 +14,16 @@ GAME_MODE_ALIASES = {
     "pvp": "regular",
     "regular": "regular",
     "pve": "pve",
+    "season": "pvp-season",
+    "wipe": "pvp-season",
 }
 
 COMMAND_GAME_MODE = {
-    "player": "regular",
+    "player": "auto",
     "pvp": "regular",
     "regular": "regular",
     "pve": "pve",
+    "season": "pvp-season",
 }
 
 
@@ -55,11 +58,11 @@ def nickname_error(value: str) -> str | None:
 def _split_mode_and_nick(rest: str) -> tuple[str, str]:
     parts = rest.split()
     if not parts:
-        return "regular", ""
+        return "auto", ""
     alias = GAME_MODE_ALIASES.get(parts[0].lower())
     if alias and len(parts) > 1:
         return alias, parts[1]
-    return "regular", parts[0]
+    return "auto", parts[0]
 
 
 def parse_command(text: str, bot_username: str | None = None) -> ParsedQuery | None:

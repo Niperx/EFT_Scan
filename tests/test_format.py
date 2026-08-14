@@ -19,7 +19,26 @@ def test_format_player_card_contains_core_stats() -> None:
     assert "Unheard" in text
     assert "K/D: 9.46" in text
     assert "tarkov.dev" in text
+    assert "Постоянный PVP" in text
     assert "<b>" in text
+
+
+def test_format_season_and_fallback() -> None:
+    profile = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    season = build_player_card(profile, game_mode="pvp-season", levels=load_player_levels())
+    season_text = format_player_card(season)
+    assert "Сезонный персонаж" in season_text
+    assert "PVP Season" in season_text
+
+    fallback = build_player_card(
+        profile,
+        game_mode="regular",
+        levels=load_player_levels(),
+        is_fallback=True,
+    )
+    fallback_text = format_player_card(fallback)
+    assert "Сезонного профиля нет" in fallback_text
+    assert "постоянный PVP" in fallback_text
 
 
 def test_format_not_found_and_help() -> None:
@@ -29,3 +48,4 @@ def test_format_not_found_and_help() -> None:
     help_text = format_help("eft_scan_bot")
     assert "@eft_scan_bot Nikita" in help_text
     assert "/player" in help_text
+    assert "сезонный персонаж" in help_text

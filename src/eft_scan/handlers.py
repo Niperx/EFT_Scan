@@ -14,6 +14,7 @@ from eft_scan.format import (
     format_not_found,
     format_player_card,
 )
+from eft_scan.modes import MODE_META, PVE, PVP, PVP_SEASON
 from eft_scan.parse import ParsedQuery, TextEntity, nickname_error, parse_command, parse_mention, parse_private_text
 from eft_scan.stats import PlayerCard, PlayerMatch
 
@@ -43,8 +44,22 @@ def _match_keyboard(matches: list[PlayerMatch], game_mode: str) -> InlineKeyboar
     return InlineKeyboardMarkup(rows)
 
 
-def _card_keyboard(url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("tarkov.dev", url=url)]])
+def _card_keyboard(card: PlayerCard) -> InlineKeyboardMarkup:
+    mode_buttons = []
+    for mode in (PVP_SEASON, PVP, PVE):
+        meta = MODE_META[mode]
+        label = str(meta["short"])
+        if mode == card.game_mode:
+            label = f"· {label} ·"
+        mode_buttons.append(
+            InlineKeyboardButton(label, callback_data=f"p:{mode}:{card.account_id}"),
+        )
+    return InlineKeyboardMarkup(
+        [
+            mode_buttons,
+            [InlineKeyboardButton("tarkov.dev", url=card.profile_url)],
+        ]
+    )
 
 
 def _message_entities(update: Update) -> list[TextEntity]:
@@ -59,7 +74,7 @@ def _message_entities(update: Update) -> list[TextEntity]:
 
 async def _reply_card(update: Update, card: PlayerCard, status_message=None) -> None:
     text = format_player_card(card)
-    markup = _card_keyboard(card.profile_url)
+    markup = _card_keyboard(card)
     if update.callback_query:
         await update.callback_query.edit_message_text(
             text,
@@ -81,15 +96,6 @@ async def _reply_card(update: Update, card: PlayerCard, status_message=None) -> 
         await message.reply_html(text, disable_web_page_preview=True, reply_markup=markup)
 
 
-def _pick_single(matches: list[PlayerMatch]) -> PlayerMatch | None:
-    if len(matches) == 1:
-        return matches[0]
-    exact = [item for item in matches if item.exact]
-    if len(exact) == 1:
-        return exact[0]
-    return None
-
-
 async def resolve_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, parsed: ParsedQuery) -> None:
     message = update.effective_message
     if not message:
@@ -106,23 +112,21 @@ async def resolve_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     status = await message.reply_text("Ищу игрока…")
     client = _client(context)
     try:
-        matches = await client.search(parsed.nickname, parsed.game_mode)
-        if not matches:
+        result = await client.lookup(parsed.nickname, parsed.game_mode)
+        if result.not_found:
             await status.edit_text(
-                format_not_found(parsed.nickname, parsed.game_mode),
+                format_not_found(parsed.nickname, result.game_mode),
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
             )
             return
-        chosen = _pick_single(matches)
-        if chosen is not None:
-            card = await client.card_for_account(chosen.account_id, parsed.game_mode)
-            await _reply_card(update, card, status)
+        if result.card is not None:
+            await _reply_card(update, result.card, status)
             return
         await status.edit_text(
-            format_matches(parsed.nickname, matches, parsed.game_mode),
+            format_matches(parsed.nickname, list(result.matches), result.game_mode),
             parse_mode=ParseMode.HTML,
-            reply_markup=_match_keyboard(matches, parsed.game_mode),
+            reply_markup=_match_keyboard(list(result.matches), result.game_mode),
         )
     except TarkovError as exc:
         await status.edit_text(str(exc))

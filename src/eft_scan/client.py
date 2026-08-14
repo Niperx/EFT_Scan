@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -18,18 +19,28 @@ from eft_scan.config import (
     USER_AGENT,
 )
 from eft_scan.index_store import json_to_sqlite, search_sqlite
-from eft_scan.stats import PlayerCard, PlayerMatch, build_player_card, load_player_levels
+from eft_scan.modes import PROFILE_PATH, PVP, PVP_SEASON, lookup_order
+from eft_scan.stats import (
+    PlayerCard,
+    PlayerMatch,
+    build_player_card,
+    load_player_levels,
+    pick_single_match,
+)
 
 logger = logging.getLogger(__name__)
-
-PROFILE_PATH = {
-    "regular": "profile",
-    "pve": "pve",
-}
 
 
 class TarkovError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class LookupResult:
+    card: PlayerCard | None = None
+    matches: tuple[PlayerMatch, ...] = ()
+    game_mode: str = PVP_SEASON
+    not_found: bool = False
 
 
 class TarkovClient:
@@ -51,7 +62,7 @@ class TarkovClient:
 
     async def warmup(self) -> None:
         try:
-            await self.ensure_index("regular")
+            await self.ensure_index(PVP_SEASON)
             await self.refresh_levels()
         except Exception:
             logger.exception("Не удалось прогреть индекс игроков")
@@ -91,7 +102,7 @@ class TarkovClient:
                 packed["loaded_at"] = 0
 
     async def refresh_loaded_indexes(self) -> None:
-        modes = list(self._indexes) or ["regular"]
+        modes = list(self._indexes) or [PVP_SEASON]
         for mode in modes:
             await self.ensure_index(mode, force=True)
 
@@ -136,11 +147,11 @@ class TarkovClient:
                     handle.write(chunk)
         tmp_path.replace(destination)
 
-    async def search(self, query: str, game_mode: str = "regular") -> list[PlayerMatch]:
+    async def search(self, query: str, game_mode: str = PVP_SEASON) -> list[PlayerMatch]:
         sqlite_path = await self.ensure_index(game_mode)
         return await asyncio.to_thread(search_sqlite, sqlite_path, query)
 
-    async def get_profile(self, account_id: str, game_mode: str = "regular") -> dict[str, Any]:
+    async def get_profile(self, account_id: str, game_mode: str = PVP_SEASON) -> dict[str, Any]:
         folder = PROFILE_PATH.get(game_mode, game_mode)
         url = f"{PLAYERS_BASE}/{folder}/{account_id}.json"
         response = await self.http.get(url)
@@ -152,6 +163,43 @@ class TarkovClient:
             raise TarkovError(str(payload.get("errmsg") or payload["err"]))
         return payload
 
-    async def card_for_account(self, account_id: str, game_mode: str = "regular") -> PlayerCard:
+    async def card_for_account(
+        self,
+        account_id: str,
+        game_mode: str = PVP_SEASON,
+        *,
+        is_fallback: bool = False,
+    ) -> PlayerCard:
         profile = await self.get_profile(account_id, game_mode)
-        return build_player_card(profile, game_mode=game_mode, levels=self.levels)
+        return build_player_card(
+            profile,
+            game_mode=game_mode,
+            levels=self.levels,
+            is_fallback=is_fallback,
+        )
+
+    async def lookup(self, query: str, game_mode: str = "auto") -> LookupResult:
+        modes = lookup_order(game_mode)
+        season_missing = False
+        for mode in modes:
+            matches = await self.search(query, mode)
+            if not matches:
+                if mode == PVP_SEASON and game_mode == "auto":
+                    season_missing = True
+                continue
+            chosen = pick_single_match(matches)
+            if chosen is None:
+                return LookupResult(matches=tuple(matches), game_mode=mode)
+            try:
+                card = await self.card_for_account(
+                    chosen.account_id,
+                    mode,
+                    is_fallback=season_missing and mode == PVP,
+                )
+                return LookupResult(card=card, game_mode=mode)
+            except TarkovError:
+                if game_mode == "auto" and mode == PVP_SEASON:
+                    season_missing = True
+                    continue
+                raise
+        return LookupResult(not_found=True, game_mode=modes[-1])

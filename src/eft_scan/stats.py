@@ -62,6 +62,7 @@ class PlayerCard:
     game_mode: str
     profile_url: str
     level_badge: str | None = None
+    is_fallback: bool = False
 
 
 def load_player_levels(path: Path | None = None) -> list[dict[str, Any]]:
@@ -145,6 +146,7 @@ def build_player_card(
     *,
     game_mode: str,
     levels: list[dict[str, Any]],
+    is_fallback: bool = False,
 ) -> PlayerCard:
     info = profile.get("info") or {}
     experience = int(info.get("experience") or 0)
@@ -168,6 +170,7 @@ def build_player_card(
         game_mode=game_mode,
         profile_url=f"https://tarkov.dev/players/{mode_path}/{account_id}",
         level_badge=badge,
+        is_fallback=is_fallback,
     )
 
 
@@ -176,6 +179,15 @@ class PlayerMatch:
     account_id: str
     nickname: str
     exact: bool = False
+
+
+def pick_single_match(matches: list[PlayerMatch]) -> PlayerMatch | None:
+    if len(matches) == 1:
+        return matches[0]
+    exact = [item for item in matches if item.exact]
+    if len(exact) == 1:
+        return exact[0]
+    return None
 
 
 def search_index(

@@ -2,7 +2,7 @@
 
 Telegram-бот для статистики игрока Escape from Tarkov по нику. Данные — [tarkov.dev](https://tarkov.dev/api/).
 
-В группе: `@бот Nikita` или `@бот pve Nikita`. Команды: `/player Nikita`, `/pve Nikita`.
+В группе: `@бот Nikita`. По умолчанию показывается **сезонный персонаж**, если его нет — постоянный PVP. Явно: `@бот pvp Nikita`, `@бот pve Nikita`. Команды: `/player`, `/season`, `/pvp`, `/pve`.
 
 ## Токен с телефона — куда класть
 

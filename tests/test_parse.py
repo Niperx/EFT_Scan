@@ -23,7 +23,7 @@ def test_parse_command_player() -> None:
     parsed = parse_command("/player PoeBwo-TTV", "eft_scan_bot")
     assert parsed is not None
     assert parsed.nickname == "PoeBwo-TTV"
-    assert parsed.game_mode == "regular"
+    assert parsed.game_mode == "auto"
 
 
 def test_parse_command_player_pve() -> None:
@@ -40,6 +40,19 @@ def test_parse_command_pve() -> None:
     assert parsed.nickname == "Nikita"
 
 
+def test_parse_command_season() -> None:
+    parsed = parse_command("/season Nikita")
+    assert parsed is not None
+    assert parsed.game_mode == "pvp-season"
+    assert parsed.nickname == "Nikita"
+
+
+def test_parse_command_pvp() -> None:
+    parsed = parse_command("/pvp Nikita")
+    assert parsed is not None
+    assert parsed.game_mode == "regular"
+
+
 def test_parse_command_ignores_other_bot() -> None:
     parsed = parse_command("/player@otherbot Nikita", "eft_scan_bot")
     assert parsed is None
@@ -51,7 +64,7 @@ def test_parse_mention() -> None:
     parsed = parse_mention(text, entities, "eft_scan_bot")
     assert parsed is not None
     assert parsed.nickname == "PoeBwo-TTV"
-    assert parsed.game_mode == "regular"
+    assert parsed.game_mode == "auto"
     assert parsed.source == "mention"
 
 
@@ -62,6 +75,15 @@ def test_parse_mention_pve() -> None:
     assert parsed is not None
     assert parsed.nickname == "Nikita"
     assert parsed.game_mode == "pve"
+
+
+def test_parse_mention_season() -> None:
+    text = "@eft_scan_bot season Nikita"
+    entities = [TextEntity(type="mention", offset=0, length=len("@eft_scan_bot"))]
+    parsed = parse_mention(text, entities, "eft_scan_bot")
+    assert parsed is not None
+    assert parsed.nickname == "Nikita"
+    assert parsed.game_mode == "pvp-season"
 
 
 def test_parse_mention_without_nick() -> None:

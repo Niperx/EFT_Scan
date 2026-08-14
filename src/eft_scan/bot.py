@@ -45,7 +45,7 @@ def build_application(settings: Settings) -> Application:
     application.bot_data["tarkov"] = TarkovClient(settings.cache_dir)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler(["player", "pvp", "regular", "pve"], player_command))
+    application.add_handler(CommandHandler(["player", "pvp", "regular", "pve", "season"], player_command))
     application.add_handler(CallbackQueryHandler(pick_player, pattern=r"^p:"))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, mention_or_private),
