@@ -9,9 +9,10 @@ description = "Telegram-бот со статистикой игроков Escape
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "python-telegram-bot[job-queue]==22.8",
+  "python-telegram-bot[job-queue,webhooks]==22.8",
   "httpx==0.28.1",
   "python-dotenv==1.1.1",
+  "ijson==3.4.0",
 ]
 
 [project.optional-dependencies]
