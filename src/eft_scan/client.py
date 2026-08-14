@@ -19,7 +19,9 @@ from eft_scan.config import (
     USER_AGENT,
 )
 from eft_scan.index_store import json_to_sqlite, search_sqlite
-from eft_scan.modes import PROFILE_PATH, PVP, PVP_SEASON, lookup_order
+from eft_scan.format import format_mode_missing
+from eft_scan.modes import MODE_ORDER, PROFILE_PATH, PVP, PVP_SEASON, lookup_order
+from eft_scan.portrait import portrait_url, render_fallback_card, webp_to_jpeg
 from eft_scan.stats import (
     PlayerCard,
     PlayerMatch,
@@ -33,6 +35,12 @@ logger = logging.getLogger(__name__)
 
 class TarkovError(RuntimeError):
     pass
+
+
+class ProfileMissingError(TarkovError):
+    def __init__(self, game_mode: str) -> None:
+        self.game_mode = game_mode
+        super().__init__(format_mode_missing(game_mode))
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +63,7 @@ class TarkovClient:
         self.levels = load_player_levels()
         self._indexes: dict[str, dict[str, Any]] = {}
         self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._modes_cache: dict[str, tuple[float, tuple[str, ...]]] = {}
 
     async def aclose(self) -> None:
         if self._owns_http:
@@ -151,16 +160,52 @@ class TarkovClient:
         sqlite_path = await self.ensure_index(game_mode)
         return await asyncio.to_thread(search_sqlite, sqlite_path, query)
 
-    async def get_profile(self, account_id: str, game_mode: str = PVP_SEASON) -> dict[str, Any]:
+    def _profile_url(self, account_id: str, game_mode: str) -> str:
         folder = PROFILE_PATH.get(game_mode, game_mode)
-        url = f"{PLAYERS_BASE}/{folder}/{account_id}.json"
+        return f"{PLAYERS_BASE}/{folder}/{account_id}.json"
+
+    def _remember_mode(self, account_id: str, game_mode: str) -> None:
+        packed = self._modes_cache.get(account_id)
+        if not packed:
+            return
+        loaded_at, modes = packed
+        if game_mode in modes:
+            return
+        merged = tuple(mode for mode in MODE_ORDER if mode in modes or mode == game_mode)
+        self._modes_cache[account_id] = (loaded_at, merged)
+
+    async def profile_exists(self, account_id: str, game_mode: str) -> bool:
+        url = self._profile_url(account_id, game_mode)
+        try:
+            response = await self.http.head(url)
+            if response.status_code in (403, 405, 501):
+                response = await self.http.get(url, headers={"Range": "bytes=0-0"})
+            return response.status_code in (200, 206)
+        except httpx.HTTPError:
+            logger.debug("Не удалось проверить профиль %s/%s", game_mode, account_id, exc_info=True)
+            return False
+
+    async def modes_for_account(self, account_id: str, *, force: bool = False) -> tuple[str, ...]:
+        packed = self._modes_cache.get(account_id)
+        if not force and packed and (time.time() - packed[0]) < 600:
+            return packed[1]
+        flags = await asyncio.gather(
+            *(self.profile_exists(account_id, mode) for mode in MODE_ORDER)
+        )
+        modes = tuple(mode for mode, exists in zip(MODE_ORDER, flags, strict=True) if exists)
+        self._modes_cache[account_id] = (time.time(), modes)
+        return modes
+
+    async def get_profile(self, account_id: str, game_mode: str = PVP_SEASON) -> dict[str, Any]:
+        url = self._profile_url(account_id, game_mode)
         response = await self.http.get(url)
         if response.status_code == 404:
-            raise TarkovError("Профиль ещё не выгружен на tarkov.dev.")
+            raise ProfileMissingError(game_mode)
         response.raise_for_status()
         payload = response.json()
         if isinstance(payload, dict) and payload.get("err"):
             raise TarkovError(str(payload.get("errmsg") or payload["err"]))
+        self._remember_mode(account_id, game_mode)
         return payload
 
     async def card_for_account(
@@ -171,12 +216,38 @@ class TarkovClient:
         is_fallback: bool = False,
     ) -> PlayerCard:
         profile = await self.get_profile(account_id, game_mode)
+        available = await self.modes_for_account(account_id)
+        if game_mode not in available:
+            available = (game_mode,) + available
         return build_player_card(
             profile,
             game_mode=game_mode,
             levels=self.levels,
             is_fallback=is_fallback,
+            available_modes=available,
         )
+
+    async def card_image(self, card: PlayerCard) -> bytes | None:
+        if card.portrait_data:
+            url = portrait_url(card.portrait_data)
+            try:
+                response = await self.http.get(
+                    url,
+                    headers={"Accept": "image/webp,image/jpeg,image/*,*/*;q=0.8"},
+                    timeout=20.0,
+                )
+                if response.status_code == 200 and response.content:
+                    content_type = response.headers.get("content-type", "")
+                    if "jpeg" in content_type or "jpg" in content_type:
+                        return response.content
+                    return await asyncio.to_thread(webp_to_jpeg, response.content)
+            except Exception:
+                logger.info("Не удалось скачать портрет %s", card.account_id, exc_info=True)
+        try:
+            return await asyncio.to_thread(render_fallback_card, card)
+        except Exception:
+            logger.warning("Не удалось нарисовать карточку %s", card.account_id, exc_info=True)
+            return None
 
     async def lookup(self, query: str, game_mode: str = "auto") -> LookupResult:
         modes = lookup_order(game_mode)

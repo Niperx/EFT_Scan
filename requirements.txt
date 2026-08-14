@@ -2,3 +2,4 @@ python-telegram-bot[job-queue,webhooks]==22.8
 httpx==0.28.1
 python-dotenv==1.1.1
 ijson==3.4.0
+Pillow==11.3.0

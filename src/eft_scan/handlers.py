@@ -1,20 +1,23 @@
 from __future__ import annotations
 
 import logging
+from io import BytesIO
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, InputMediaPhoto, Update
 from telegram.constants import ChatType, ParseMode
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from eft_scan.client import TarkovClient, TarkovError
+from eft_scan.client import ProfileMissingError, TarkovClient, TarkovError
 from eft_scan.format import (
+    CAPTION_LIMIT,
     format_help,
     format_matches,
     format_need_nick,
     format_not_found,
     format_player_card,
 )
-from eft_scan.modes import MODE_META, PVE, PVP, PVP_SEASON
+from eft_scan.modes import MODE_META, MODE_ORDER
 from eft_scan.parse import ParsedQuery, TextEntity, nickname_error, parse_command, parse_mention, parse_private_text
 from eft_scan.stats import PlayerCard, PlayerMatch
 
@@ -44,22 +47,31 @@ def _match_keyboard(matches: list[PlayerMatch], game_mode: str) -> InlineKeyboar
     return InlineKeyboardMarkup(rows)
 
 
+def keyboard_modes(card: PlayerCard) -> tuple[str, ...]:
+    present = set(card.available_modes or MODE_ORDER)
+    present.add(card.game_mode)
+    return tuple(mode for mode in MODE_ORDER if mode in present)
+
+
 def _card_keyboard(card: PlayerCard) -> InlineKeyboardMarkup:
-    mode_buttons = []
-    for mode in (PVP_SEASON, PVP, PVE):
+    buttons = []
+    for mode in keyboard_modes(card):
         meta = MODE_META[mode]
         label = str(meta["short"])
         if mode == card.game_mode:
             label = f"· {label} ·"
-        mode_buttons.append(
+        buttons.append(
             InlineKeyboardButton(label, callback_data=f"p:{mode}:{card.account_id}"),
         )
-    return InlineKeyboardMarkup(
-        [
-            mode_buttons,
-            [InlineKeyboardButton("tarkov.dev", url=card.profile_url)],
-        ]
-    )
+    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton("tarkov.dev", url=card.profile_url)])
+    return InlineKeyboardMarkup(rows)
+
+
+def _photo_file(image: bytes, account_id: str) -> InputFile:
+    buffer = BytesIO(image)
+    buffer.name = f"{account_id}.jpg"
+    return InputFile(buffer, filename=buffer.name)
 
 
 def _message_entities(update: Update) -> list[TextEntity]:
@@ -72,17 +84,86 @@ def _message_entities(update: Update) -> list[TextEntity]:
     ]
 
 
-async def _reply_card(update: Update, card: PlayerCard, status_message=None) -> None:
+async def _reply_card(
+    update: Update,
+    card: PlayerCard,
+    *,
+    status_message=None,
+    client: TarkovClient | None = None,
+) -> None:
     text = format_player_card(card)
     markup = _card_keyboard(card)
+    photo: bytes | None = None
+    if client is not None:
+        photo = await client.card_image(card)
+    caption = text if len(text) <= CAPTION_LIMIT else None
+
     if update.callback_query:
-        await update.callback_query.edit_message_text(
-            text,
+        query = update.callback_query
+        message = query.message
+        if photo is not None:
+            media = InputMediaPhoto(
+                media=_photo_file(photo, card.account_id),
+                caption=caption or card.nickname,
+                parse_mode=ParseMode.HTML,
+            )
+            try:
+                await query.edit_message_media(media=media, reply_markup=markup)
+                if caption is None and message:
+                    await message.reply_html(text, disable_web_page_preview=True)
+                return
+            except BadRequest:
+                logger.info("Не вышло заменить медиа, отправляю новое сообщение")
+                if message:
+                    try:
+                        await message.delete()
+                    except BadRequest:
+                        pass
+                    await message.chat.send_photo(
+                        photo=_photo_file(photo, card.account_id),
+                        caption=caption or card.nickname,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=markup,
+                    )
+                    if caption is None:
+                        await message.chat.send_message(
+                            text,
+                            parse_mode=ParseMode.HTML,
+                            disable_web_page_preview=True,
+                        )
+                    return
+        try:
+            await query.edit_message_text(
+                text,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+                reply_markup=markup,
+            )
+        except BadRequest:
+            await query.edit_message_caption(
+                caption=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=markup,
+            )
+        return
+
+    chat_message = update.effective_message
+    if photo is not None and chat_message:
+        if status_message is not None:
+            try:
+                await status_message.delete()
+            except BadRequest:
+                pass
+        await chat_message.reply_photo(
+            photo=_photo_file(photo, card.account_id),
+            caption=caption or card.nickname,
             parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
             reply_markup=markup,
         )
+        if caption is None:
+            await chat_message.reply_html(text, disable_web_page_preview=True)
         return
+
     if status_message is not None:
         await status_message.edit_text(
             text,
@@ -91,9 +172,8 @@ async def _reply_card(update: Update, card: PlayerCard, status_message=None) -> 
             reply_markup=markup,
         )
         return
-    message = update.effective_message
-    if message:
-        await message.reply_html(text, disable_web_page_preview=True, reply_markup=markup)
+    if chat_message:
+        await chat_message.reply_html(text, disable_web_page_preview=True, reply_markup=markup)
 
 
 async def resolve_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, parsed: ParsedQuery) -> None:
@@ -121,7 +201,7 @@ async def resolve_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             )
             return
         if result.card is not None:
-            await _reply_card(update, result.card, status)
+            await _reply_card(update, result.card, status_message=status, client=client)
             return
         await status.edit_text(
             format_matches(parsed.nickname, list(result.matches), result.game_mode),
@@ -172,19 +252,23 @@ async def pick_player(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     query = update.callback_query
     if not query or not query.data:
         return
-    await query.answer()
     try:
         _, game_mode, account_id = query.data.split(":", 2)
     except ValueError:
+        await query.answer()
         await query.edit_message_text("Некорректный выбор.")
         return
     try:
         card = await _client(context).card_for_account(account_id, game_mode)
+    except ProfileMissingError as exc:
+        await query.answer(str(exc)[:200], show_alert=True)
+        return
     except TarkovError as exc:
-        await query.edit_message_text(str(exc))
+        await query.answer(str(exc)[:200], show_alert=True)
         return
     except Exception:
         logger.exception("Ошибка загрузки профиля %s", account_id)
-        await query.edit_message_text("Не получилось получить профиль. Попробуйте позже.")
+        await query.answer("Не получилось получить профиль. Попробуйте позже.", show_alert=True)
         return
-    await _reply_card(update, card)
+    await query.answer()
+    await _reply_card(update, card, client=_client(context))

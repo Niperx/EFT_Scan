@@ -76,3 +76,20 @@ def test_build_player_card() -> None:
     assert card.hours_played == 14822
     assert card.profile_url.endswith("/regular/6976458")
     assert card.last_active is not None
+
+
+def test_build_arena_card() -> None:
+    profile = json.loads((Path(__file__).parent / "fixtures" / "arena.json").read_text(encoding="utf-8"))
+    card = build_player_card(profile, game_mode="arena", levels=load_player_levels())
+    assert card.nickname == "PoeBwo-TTV"
+    assert card.arena is not None
+    assert card.arena.games == 221
+    assert card.arena.wins == 113
+    assert card.arena.kills == 6058
+    assert card.arena.best_arp == 2025
+    assert card.arena.kd_label == "1.35"
+    names = {line.name for line in card.arena.modes}
+    assert "Last Hero" in names
+    assert card.hours_played == 652
+    assert card.portrait_data is not None
+    assert card.profile_url.endswith("/arena/6976458")

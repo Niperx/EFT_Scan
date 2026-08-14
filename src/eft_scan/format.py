@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from html import escape
 
-from eft_scan.modes import MODE_META, PVP
-from eft_scan.stats import PlayerCard, PlayerMatch, RaidStats
+from eft_scan.modes import ARENA, MODE_META, PVP
+from eft_scan.stats import ArenaStats, PlayerCard, PlayerMatch, RaidStats
+
+CAPTION_LIMIT = 1024
 
 
 def mode_label(game_mode: str) -> str:
@@ -20,16 +22,59 @@ def _fmt_dt(value: datetime | None) -> str:
     return value.strftime("%d.%m.%Y %H:%M UTC")
 
 
+def _plural(n: int, one: str, few: str, many: str) -> str:
+    value = abs(n) % 100
+    if 11 <= value <= 14:
+        word = many
+    else:
+        last = value % 10
+        if last == 1:
+            word = one
+        elif 2 <= last <= 4:
+            word = few
+        else:
+            word = many
+    return f"{n} {word}"
+
+
+def _pct(value: float) -> str:
+    return f"{value * 100:.1f}%".replace(".", ",")
+
+
+def survival_bar(rate: float, width: int = 10) -> str:
+    filled = max(0, min(width, round(rate * width)))
+    return "▰" * filled + "▱" * (width - filled)
+
+
 def _raid_block(title: str, stats: RaidStats) -> str:
-    survival = f"{stats.survival_rate * 100:.1f}%".replace(".", ",")
+    bar = survival_bar(stats.survival_rate)
     return (
         f"<b>{escape(title)}</b>\n"
-        f"Рейды: {stats.raids}\n"
-        f"Выживаемость: {survival} ({stats.survived})\n"
-        f"K/D: {stats.kd_label} ({stats.kills}/{stats.deaths})\n"
-        f"Убито PMC: {stats.pmc_kills}\n"
-        f"Стрик: {stats.longest_streak}"
+        f"{bar}  {_pct(stats.survival_rate)}\n"
+        f"Рейды <code>{stats.raids}</code> · выжил <code>{stats.survived}</code>\n"
+        f"K/D <code>{escape(stats.kd_label)}</code>"
+        f"  ({stats.kills}/{stats.deaths})\n"
+        f"PMC <code>{stats.pmc_kills}</code> · стрик <code>{stats.longest_streak}</code>"
     )
+
+
+def _arena_block(stats: ArenaStats) -> str:
+    lines = [
+        "<b>Общий зачёт</b>",
+        f"Матчи <code>{stats.games}</code> · победы <code>{stats.wins}</code>  ({_pct(stats.win_rate)})",
+        f"K/D <code>{escape(stats.kd_label)}</code>  ({stats.kills}/{stats.deaths})",
+        f"ARP <code>{stats.best_arp}</code> · стрик <code>{stats.longest_win_streak}</code>"
+        f" · без смертей <code>{stats.max_kills_without_deaths}</code>",
+    ]
+    if stats.modes:
+        lines.append("")
+        for mode in stats.modes:
+            lines.append(
+                f"• {escape(mode.name)} · <code>{mode.games}</code>"
+                f" · {_pct(mode.win_rate)}"
+                f" · K/D <code>{escape(mode.kd_label)}</code>"
+            )
+    return "\n".join(lines)
 
 
 def _mode_header(card: PlayerCard) -> str:
@@ -37,39 +82,41 @@ def _mode_header(card: PlayerCard) -> str:
     icon = str(meta.get("icon") or "🎮")
     title = str(meta.get("title") or card.game_mode)
     hint = str(meta.get("hint") or "")
-    lines = [f"{icon} <b>{escape(title)}</b>"]
+    inner = [f"{icon} <b>{escape(title)}</b>"]
     if card.is_fallback and card.game_mode == PVP:
-        lines.append("<i>Сезонного профиля нет — показан постоянный PVP</i>")
+        inner.append("<i>Сезонного профиля нет — показан постоянный PVP</i>")
     elif hint:
-        lines.append(f"<i>{escape(hint)}</i>")
-    return "\n".join(lines)
+        inner.append(f"<i>{escape(hint)}</i>")
+    return "<blockquote>" + "\n".join(inner) + "</blockquote>"
 
 
 def format_player_card(card: PlayerCard) -> str:
     side_icon = "🐻" if card.side.lower() == "bear" else "🦅"
     prestige = f" · престиж {card.prestige}" if card.prestige else ""
-    editions = f"\n{escape(', '.join(card.editions))}" if card.editions else ""
+    editions = escape(" · ".join(card.editions)) if card.editions else ""
     title = (
-        f"{side_icon} <b>{escape(card.nickname)}</b> · "
-        f"ур. {card.level} {escape(card.side)}{prestige}"
+        f"{side_icon} <b>{escape(card.nickname)}</b>\n"
+        f"<code>ур. {card.level}</code> · {escape(card.side)}{prestige}"
     )
-    meta = (
-        f"ID {escape(card.account_id)}{editions}\n"
-        f"В игре: {card.hours_played} ч\n"
-        f"Активность: {_fmt_dt(card.last_active)}\n"
-        f"Достижения: {card.achievements}\n"
+    if editions:
+        title += f"\n{editions}"
+    activity = card.last_active or card.updated
+    meta_lines = [
+        f"ID <code>{escape(card.account_id)}</code>",
+        f"⏱ {card.hours_played} ч · активность {_fmt_dt(activity)}",
+    ]
+    if card.achievements:
+        meta_lines.append(f"🏆 {_plural(card.achievements, 'достижение', 'достижения', 'достижений')}")
+    meta_lines.append(
         f'<a href="{escape(card.profile_url, quote=True)}">Открыть на tarkov.dev</a>'
     )
-    updated = f"\nОбновлено: {_fmt_dt(card.updated)}"
-    return "\n\n".join(
-        [
-            _mode_header(card),
-            title,
-            meta + updated,
-            _raid_block("PMC", card.pmc),
-            _raid_block("Scav", card.scav),
-        ]
-    )
+    blocks = [_mode_header(card), title, "\n".join(meta_lines)]
+    if card.game_mode == ARENA and card.arena is not None:
+        blocks.append(_arena_block(card.arena))
+    else:
+        blocks.append(_raid_block("PMC", card.pmc))
+        blocks.append(_raid_block("Scav", card.scav))
+    return "\n\n".join(blocks)
 
 
 def format_matches(query: str, matches: list[PlayerMatch], game_mode: str) -> str:
@@ -77,7 +124,7 @@ def format_matches(query: str, matches: list[PlayerMatch], game_mode: str) -> st
     lines = [f"Нашёл несколько игроков по запросу <b>{escape(query)}</b> ({escape(mode)}):"]
     for index, match in enumerate(matches, start=1):
         mark = "✓" if match.exact else "·"
-        lines.append(f"{index}. {mark} {escape(match.nickname)} · ID {escape(match.account_id)}")
+        lines.append(f"{index}. {mark} {escape(match.nickname)} · ID <code>{escape(match.account_id)}</code>")
     lines.append("Выберите игрока кнопкой ниже.")
     return "\n".join(lines)
 
@@ -101,12 +148,15 @@ def format_help(bot_username: str) -> str:
         "<b>В группе</b>\n"
         f"{escape(mention)} Nikita\n"
         f"{escape(mention)} pvp Nikita\n"
-        f"{escape(mention)} pve Nikita\n\n"
+        f"{escape(mention)} pve Nikita\n"
+        f"{escape(mention)} arena Nikita\n\n"
         "<b>Команды</b>\n"
         "/player Nikita — сезон, иначе PVP\n"
         "/season Nikita — только сезон\n"
         "/pvp Nikita — постоянный PVP\n"
-        "/pve Nikita — PVE\n\n"
+        "/pve Nikita — PVE\n"
+        "/arena Nikita — Tarkov Arena\n\n"
+        "Кнопки под карточкой переключают режимы, которые есть у этого аккаунта.\n"
         "В личке можно просто написать ник.\n"
         "Данные: <a href=\"https://tarkov.dev/api/\">tarkov.dev</a>."
     )
@@ -115,3 +165,7 @@ def format_help(bot_username: str) -> str:
 def format_need_nick(bot_username: str) -> str:
     mention = f"@{bot_username}" if bot_username else "@bot"
     return f"Укажите ник после упоминания, например: {escape(mention)} Nikita"
+
+
+def format_mode_missing(game_mode: str) -> str:
+    return f"В режиме {mode_label(game_mode)} профиля нет."

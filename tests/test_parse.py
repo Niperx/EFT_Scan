@@ -94,9 +94,26 @@ def test_parse_mention_without_nick() -> None:
     assert parsed.nickname == ""
 
 
+def test_parse_command_arena() -> None:
+    parsed = parse_command("/arena Nikita")
+    assert parsed is not None
+    assert parsed.game_mode == "arena"
+    assert parsed.nickname == "Nikita"
+
+
+def test_parse_mention_arena() -> None:
+    text = "@eft_scan_bot arena Nikita"
+    entities = [TextEntity(type="mention", offset=0, length=len("@eft_scan_bot"))]
+    parsed = parse_mention(text, entities, "eft_scan_bot")
+    assert parsed is not None
+    assert parsed.nickname == "Nikita"
+    assert parsed.game_mode == "arena"
+
+
 def test_parse_private_text() -> None:
     parsed = parse_private_text("pve Nikita")
     assert parsed is not None
     assert parsed.game_mode == "pve"
     assert parsed.nickname == "Nikita"
     assert parse_private_text("/player x") is None
+    assert parse_private_text("arena Nikita").game_mode == "arena"

@@ -1,0 +1,87 @@
+{
+  "aid": 6976458,
+  "info": {
+    "nickname": "PoeBwo-TTV",
+    "side": "Bear",
+    "experience": 51945860,
+    "memberCategory": 2,
+    "registrationDate": 1770087791
+  },
+  "presetCustomization": {
+    "side": "Bear",
+    "upperSuitId": "67506a0bf31909748c0dcdb6",
+    "lowerSuitId": "675697337a69ab97c30a09f8"
+  },
+  "profileCustomization": {
+    "head": "60a6aaad42fd2735e4589978",
+    "body": "5cc0858d14c02e000c6bea66",
+    "feet": "5cc085bb14c02e000e67a5c5",
+    "hands": "5cc0876314c02e000c6bea6b"
+  },
+  "achievements": {
+    "a": 1,
+    "b": 2
+  },
+  "stat": {
+    "totalInGameTime": 2346925,
+    "arenaOverAllCounters": {
+      "UnrankedOverall": {
+        "Counters": {
+          "MaxKillsWithoutDeaths": 11,
+          "LongestWinStreak": 7,
+          "BestArp": 2025,
+          "GamesCount": 221,
+          "Kills": 6058,
+          "Deaths": 4502
+        }
+      },
+      "UnrankedLastHero": {
+        "Counters": {
+          "ArenaWins": 19,
+          "GamesCount": 53,
+          "Kills": 1923,
+          "Deaths": 1474
+        }
+      },
+      "UnrankedCheckPoint": {
+        "Counters": {
+          "ArenaWins": 75,
+          "GamesCount": 122,
+          "Kills": 3763,
+          "Deaths": 2776
+        }
+      },
+      "UnrankedTeamFight": {
+        "Counters": {
+          "GamesCount": 33,
+          "Kills": 261,
+          "Deaths": 167,
+          "ArenaWins": 14
+        }
+      },
+      "UnrankedBlastGang": {
+        "Counters": {
+          "GamesCount": 8,
+          "Kills": 69,
+          "Deaths": 58,
+          "ArenaWins": 4
+        }
+      },
+      "UnrankedShootOutDuo": {
+        "Counters": {
+          "GamesCount": 5,
+          "Kills": 42,
+          "Deaths": 27,
+          "ArenaWins": 1
+        }
+      }
+    }
+  },
+  "equipment": {
+    "id": "root",
+    "items": [
+      {"_id": "root", "_tpl": "55d7217a4bdc2d86028b456d"}
+    ]
+  },
+  "updated": 1785554152883
+}

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 NICKNAME_RE = re.compile(r"^(?:[A-Za-z0-9-_]{3,15}|TarkovCitizen\d{1,10})$")
 NICKNAME_CHARS_RE = re.compile(r"^[A-Za-z0-9-_]+$")
 COMMAND_RE = re.compile(
-    r"^/(player|pve|pvp|regular|season)(?:@([A-Za-z0-9_]+))?(?:\s+|$)",
+    r"^/(player|pve|pvp|regular|season|arena)(?:@([A-Za-z0-9_]+))?(?:\s+|$)",
     re.IGNORECASE,
 )
 
@@ -16,6 +16,7 @@ GAME_MODE_ALIASES = {
     "pve": "pve",
     "season": "pvp-season",
     "wipe": "pvp-season",
+    "arena": "arena",
 }
 
 COMMAND_GAME_MODE = {
@@ -24,6 +25,7 @@ COMMAND_GAME_MODE = {
     "regular": "regular",
     "pve": "pve",
     "season": "pvp-season",
+    "arena": "arena",
 }
 
 

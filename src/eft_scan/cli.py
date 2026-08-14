@@ -41,7 +41,11 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(description="Поиск игрока EFT без Telegram")
     parser.add_argument("nickname")
-    parser.add_argument("--mode", default="auto", choices=("auto", "pvp-season", "regular", "pve"))
+    parser.add_argument(
+        "--mode",
+        default="auto",
+        choices=("auto", "pvp-season", "regular", "pve", "arena"),
+    )
     parser.add_argument("--cache", default=".cache")
     args = parser.parse_args()
     asyncio.run(lookup(args.nickname, args.mode, Path(args.cache)))

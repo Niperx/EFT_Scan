@@ -7,6 +7,7 @@ from eft_scan.format import format_help, format_not_found, format_player_card
 from eft_scan.stats import build_player_card, load_player_levels
 
 FIXTURE = Path(__file__).parent / "fixtures" / "profile.json"
+ARENA = Path(__file__).parent / "fixtures" / "arena.json"
 
 
 def test_format_player_card_contains_core_stats() -> None:
@@ -17,10 +18,14 @@ def test_format_player_card_contains_core_stats() -> None:
     assert "ур." in text
     assert "престиж 6" in text
     assert "Unheard" in text
-    assert "K/D: 9.46" in text
+    assert "K/D" in text
+    assert "9.46" in text
+    assert "▰" in text
+    assert "<blockquote>" in text
+    assert "<code>" in text
     assert "tarkov.dev" in text
     assert "Постоянный PVP" in text
-    assert "<b>" in text
+    assert "2 достижения" in text
 
 
 def test_format_season_and_fallback() -> None:
@@ -41,6 +46,18 @@ def test_format_season_and_fallback() -> None:
     assert "постоянный PVP" in fallback_text
 
 
+def test_format_arena_card() -> None:
+    profile = json.loads(ARENA.read_text(encoding="utf-8"))
+    card = build_player_card(profile, game_mode="arena", levels=load_player_levels())
+    text = format_player_card(card)
+    assert "Tarkov Arena" in text
+    assert "Общий зачёт" in text
+    assert "2025" in text
+    assert "Last Hero" in text
+    assert "CheckPoint" in text
+    assert "PMC" not in text
+
+
 def test_format_not_found_and_help() -> None:
     missing = format_not_found("NoSuchPlayer", "pve")
     assert "NoSuchPlayer" in missing
@@ -48,4 +65,5 @@ def test_format_not_found_and_help() -> None:
     help_text = format_help("eft_scan_bot")
     assert "@eft_scan_bot Nikita" in help_text
     assert "/player" in help_text
+    assert "/arena" in help_text
     assert "сезонный персонаж" in help_text

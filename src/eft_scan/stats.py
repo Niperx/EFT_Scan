@@ -1,3 +1,5 @@
+"""Нормализация профиля игрока Tarkov."""
+
 from __future__ import annotations
 
 import bisect
@@ -6,6 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from eft_scan.modes import ARENA, PLAYERS_SITE, SITE_PATH
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULT_LEVELS_PATH = PACKAGE_DIR / "data" / "player_levels.json"
@@ -17,6 +21,23 @@ MEMBER_FLAGS: tuple[tuple[str, int], ...] = (
     ("Sherpa", 256),
     ("Emissary", 512),
     ("Unheard", 1024),
+)
+
+ARENA_MODE_LABELS: dict[str, str] = {
+    "UnrankedOverall": "Общий зачёт",
+    "UnrankedLastHero": "Last Hero",
+    "UnrankedCheckPoint": "CheckPoint",
+    "UnrankedTeamFight": "TeamFight",
+    "UnrankedBlastGang": "BlastGang",
+    "UnrankedShootOutDuo": "ShootOut Duo",
+}
+
+ARENA_MODE_ORDER = (
+    "UnrankedLastHero",
+    "UnrankedCheckPoint",
+    "UnrankedTeamFight",
+    "UnrankedBlastGang",
+    "UnrankedShootOutDuo",
 )
 
 
@@ -45,6 +66,32 @@ class RaidStats:
 
 
 @dataclass(frozen=True, slots=True)
+class ArenaModeLine:
+    key: str
+    name: str
+    games: int
+    wins: int
+    kills: int
+    deaths: int
+    kd_label: str
+    win_rate: float
+
+
+@dataclass(frozen=True, slots=True)
+class ArenaStats:
+    games: int
+    wins: int
+    kills: int
+    deaths: int
+    kd_label: str
+    win_rate: float
+    best_arp: int
+    longest_win_streak: int
+    max_kills_without_deaths: int
+    modes: tuple[ArenaModeLine, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class PlayerCard:
     account_id: str
     nickname: str
@@ -63,6 +110,9 @@ class PlayerCard:
     profile_url: str
     level_badge: str | None = None
     is_fallback: bool = False
+    arena: ArenaStats | None = None
+    available_modes: tuple[str, ...] = ()
+    portrait_data: dict[str, Any] | None = None
 
 
 def load_player_levels(path: Path | None = None) -> list[dict[str, Any]]:
@@ -114,6 +164,70 @@ def parse_raid_stats(blob: dict[str, Any] | None) -> RaidStats:
     )
 
 
+def _arena_counters(blob: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(blob, dict):
+        return {}
+    inner = blob.get("Counters")
+    if isinstance(inner, dict):
+        return inner
+    return blob
+
+
+def _kd_label(kills: int, deaths: int) -> str:
+    if deaths <= 0:
+        return "∞" if kills > 0 else "0.00"
+    return f"{kills / deaths:.2f}"
+
+
+def _arena_mode_line(key: str, raw: dict[str, Any] | None) -> ArenaModeLine:
+    counters = _arena_counters(raw)
+
+    def n(name: str) -> int:
+        return int(counters.get(name) or 0)
+
+    games = n("GamesCount")
+    wins = n("ArenaWins") or n("Wins")
+    kills = n("Kills")
+    deaths = n("Deaths")
+    return ArenaModeLine(
+        key=key,
+        name=ARENA_MODE_LABELS.get(key, key),
+        games=games,
+        wins=wins,
+        kills=kills,
+        deaths=deaths,
+        kd_label=_kd_label(kills, deaths),
+        win_rate=(wins / games) if games else 0.0,
+    )
+
+
+def parse_arena_stats(profile: dict[str, Any]) -> ArenaStats | None:
+    counters = ((profile.get("stat") or {}).get("arenaOverAllCounters")) or {}
+    if not isinstance(counters, dict) or not counters:
+        return None
+    overall = _arena_mode_line("UnrankedOverall", counters.get("UnrankedOverall"))
+    modes = tuple(
+        line
+        for key in ARENA_MODE_ORDER
+        if (line := _arena_mode_line(key, counters.get(key))).games > 0
+    )
+    wins = overall.wins or sum(line.wins for line in modes)
+    games = overall.games
+    overall_raw = _arena_counters(counters.get("UnrankedOverall"))
+    return ArenaStats(
+        games=games,
+        wins=wins,
+        kills=overall.kills,
+        deaths=overall.deaths,
+        kd_label=_kd_label(overall.kills, overall.deaths),
+        win_rate=(wins / games) if games else 0.0,
+        best_arp=int(overall_raw.get("BestArp") or 0),
+        longest_win_streak=int(overall_raw.get("LongestWinStreak") or 0),
+        max_kills_without_deaths=int(overall_raw.get("MaxKillsWithoutDeaths") or 0),
+        modes=modes,
+    )
+
+
 def _last_active(profile: dict[str, Any]) -> datetime | None:
     skills = ((profile.get("skills") or {}).get("Common")) or []
     latest = 0
@@ -138,7 +252,26 @@ def _updated_at(profile: dict[str, Any]) -> datetime | None:
 
 def hours_played(profile: dict[str, Any]) -> int:
     seconds = int(((profile.get("pmcStats") or {}).get("eft") or {}).get("totalInGameTime") or 0)
+    if not seconds:
+        seconds = int((profile.get("stat") or {}).get("totalInGameTime") or 0)
     return round(seconds / 3600)
+
+
+def extract_portrait_data(profile: dict[str, Any]) -> dict[str, Any] | None:
+    aid = profile.get("aid")
+    customization = profile.get("customization") or profile.get("profileCustomization")
+    preset = profile.get("presetCustomization") or {}
+    equipment = profile.get("equipment")
+    if not customization and not preset and not equipment:
+        return None
+    payload: dict[str, Any] = {"aid": aid}
+    if isinstance(customization, dict):
+        payload["customization"] = customization
+    if isinstance(preset, dict) and preset:
+        payload["presetCustomization"] = preset
+    if equipment:
+        payload["equipment"] = equipment
+    return payload
 
 
 def build_player_card(
@@ -147,12 +280,14 @@ def build_player_card(
     game_mode: str,
     levels: list[dict[str, Any]],
     is_fallback: bool = False,
+    available_modes: tuple[str, ...] = (),
 ) -> PlayerCard:
     info = profile.get("info") or {}
     experience = int(info.get("experience") or 0)
     level, badge = player_level(experience, levels)
-    account_id = str(profile.get("aid") or "")
-    mode_path = "regular" if game_mode == "regular" else game_mode
+    account_id = str(profile.get("aid") or info.get("aid") or "")
+    mode_path = SITE_PATH.get(game_mode, game_mode)
+    arena = parse_arena_stats(profile) if game_mode == ARENA else None
     return PlayerCard(
         account_id=account_id,
         nickname=str(info.get("nickname") or "Unknown"),
@@ -168,9 +303,12 @@ def build_player_card(
         scav=parse_raid_stats(profile.get("scavStats")),
         achievements=len(profile.get("achievements") or {}),
         game_mode=game_mode,
-        profile_url=f"https://tarkov.dev/players/{mode_path}/{account_id}",
+        profile_url=f"{PLAYERS_SITE}/{mode_path}/{account_id}",
         level_badge=badge,
         is_fallback=is_fallback,
+        arena=arena,
+        available_modes=available_modes,
+        portrait_data=extract_portrait_data(profile),
     )
 
 
