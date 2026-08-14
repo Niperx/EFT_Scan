@@ -36,6 +36,32 @@ Telegram-бот для статистики игрока Escape from Tarkov по
 
 На [cron-job.org](https://cron-job.org) (бесплатно, с телефона) создайте задачу: раз в 10 минут GET на `https://ваш-сервис.onrender.com/health`. Тогда бот почти не спит. У Render лимит **750 бесплатных часов в месяц** — одного бота хватает на календарный месяц, если держать его включённым.
 
+## Тексты для BotFather
+
+В [@BotFather](https://t.me/BotFather) → ваш бот:
+
+**Edit Bot → Edit About** (до 120 символов):
+
+```
+Статистика игроков Escape from Tarkov: сезон, PVP, PVE и Arena по нику.
+```
+
+**Edit Bot → Edit Description** (текст до кнопки Start, до 512):
+
+```
+EFT Scan — статистика игрока Escape from Tarkov по нику.
+
+Сезон · PVP · PVE · Tarkov Arena
+Карточка с PMC K/D, выживаемостью и портретом персонажа.
+
+В личке напишите ник. В группе: @бот Ник
+Команды: /player /season /pvp /pve /arena
+
+Данные: tarkov.dev
+```
+
+Список команд (`/player`, `/arena` и т.д.) бот выставляет сам при старте через `setMyCommands` — они появятся в меню и при вводе `/`.
+
 ## Карточка и картинки
 
 Бот оформляет статистику HTML-карточкой и пытается приложить портрет персонажа с [imagemagic.tarkov.dev](https://imagemagic.tarkov.dev) — тот же рендер, что на tarkov.dev. URL слишком длинный для Telegram, поэтому картинка скачивается и отправляется файлом. Если рендер недоступен, бот рисует свою карточку через Pillow.

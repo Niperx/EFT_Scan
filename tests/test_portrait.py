@@ -4,7 +4,14 @@ import json
 from pathlib import Path
 
 from eft_scan.handlers import _card_keyboard, keyboard_modes
-from eft_scan.portrait import portrait_request_body, portrait_url, render_fallback_card, webp_to_jpeg
+from eft_scan.portrait import (
+    FALLBACK_SIZE,
+    PORTRAIT_MAX_SIDE,
+    portrait_request_body,
+    portrait_url,
+    render_fallback_card,
+    webp_to_jpeg,
+)
 from eft_scan.stats import build_player_card, load_player_levels
 
 PROFILE = Path(__file__).parent / "fixtures" / "profile.json"
@@ -70,7 +77,7 @@ def test_render_fallback_card_jpeg() -> None:
     from io import BytesIO
 
     image = Image.open(BytesIO(jpeg))
-    assert image.size == (960, 540)
+    assert image.size == FALLBACK_SIZE
 
 
 def test_webp_to_jpeg_roundtrip() -> None:
@@ -79,6 +86,8 @@ def test_webp_to_jpeg_roundtrip() -> None:
     from PIL import Image
 
     buffer = BytesIO()
-    Image.new("RGB", (8, 8), (10, 20, 30)).save(buffer, format="WEBP")
+    Image.new("RGB", (800, 800), (10, 20, 30)).save(buffer, format="WEBP")
     jpeg = webp_to_jpeg(buffer.getvalue())
     assert jpeg[:2] == b"\xff\xd8"
+    image = Image.open(BytesIO(jpeg))
+    assert max(image.size) == PORTRAIT_MAX_SIDE

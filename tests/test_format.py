@@ -18,14 +18,16 @@ def test_format_player_card_contains_core_stats() -> None:
     assert "ур." in text
     assert "престиж 6" in text
     assert "Unheard" in text
-    assert "K/D" in text
-    assert "9.46" in text
+    assert "PMC K/D" in text
+    assert "2.30" in text
+    assert "6317" in text
     assert "▰" in text
     assert "<blockquote>" in text
     assert "<code>" in text
     assert "tarkov.dev" in text
     assert "Постоянный PVP" in text
     assert "2 достижения" in text
+    assert "9.46" not in text
 
 
 def test_format_season_and_fallback() -> None:
@@ -67,3 +69,6 @@ def test_format_not_found_and_help() -> None:
     assert "/player" in help_text
     assert "/arena" in help_text
     assert "сезонный персонаж" in help_text
+    assert "<blockquote>" in help_text
+    assert "EFT Scan" in help_text
+    assert "PMC K/D" in help_text

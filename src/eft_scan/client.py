@@ -21,7 +21,7 @@ from eft_scan.config import (
 from eft_scan.index_store import json_to_sqlite, search_sqlite
 from eft_scan.format import format_mode_missing
 from eft_scan.modes import MODE_ORDER, PROFILE_PATH, PVP, PVP_SEASON, lookup_order
-from eft_scan.portrait import portrait_url, render_fallback_card, webp_to_jpeg
+from eft_scan.portrait import portrait_url, render_fallback_card, image_to_jpeg
 from eft_scan.stats import (
     PlayerCard,
     PlayerMatch,
@@ -237,10 +237,7 @@ class TarkovClient:
                     timeout=20.0,
                 )
                 if response.status_code == 200 and response.content:
-                    content_type = response.headers.get("content-type", "")
-                    if "jpeg" in content_type or "jpg" in content_type:
-                        return response.content
-                    return await asyncio.to_thread(webp_to_jpeg, response.content)
+                    return await asyncio.to_thread(image_to_jpeg, response.content)
             except Exception:
                 logger.info("Не удалось скачать портрет %s", card.account_id, exc_info=True)
         try:

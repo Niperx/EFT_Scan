@@ -64,6 +64,13 @@ class RaidStats:
             return "∞" if self.kills > 0 else "0.00"
         return f"{self.kills / self.deaths:.2f}"
 
+    @property
+    def pmc_kd_label(self) -> str:
+        """K/D по убийствам PMC (без AI/Scav)."""
+        if self.deaths <= 0:
+            return "∞" if self.pmc_kills > 0 else "0.00"
+        return f"{self.pmc_kills / self.deaths:.2f}"
+
 
 @dataclass(frozen=True, slots=True)
 class ArenaModeLine:

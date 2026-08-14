@@ -70,6 +70,8 @@ def test_build_player_card() -> None:
     assert card.pmc.survived == 2003
     assert card.pmc.kills == 26011
     assert card.pmc.kd_label == "9.46"
+    assert card.pmc.pmc_kd_label == "2.30"
+    assert card.pmc.pmc_kills == 6317
     assert card.level == 71
     assert card.scav.raids == 5
     assert card.achievements == 2

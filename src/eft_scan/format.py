@@ -46,15 +46,25 @@ def survival_bar(rate: float, width: int = 10) -> str:
     return "▰" * filled + "▱" * (width - filled)
 
 
-def _raid_block(title: str, stats: RaidStats) -> str:
+def _raid_block(title: str, stats: RaidStats, *, pmc_kd: bool = False) -> str:
     bar = survival_bar(stats.survival_rate)
+    if pmc_kd:
+        kd_line = (
+            f"PMC K/D <code>{escape(stats.pmc_kd_label)}</code>"
+            f"  ({stats.pmc_kills}/{stats.deaths})\n"
+            f"Убийств <code>{stats.kills}</code> · стрик <code>{stats.longest_streak}</code>"
+        )
+    else:
+        kd_line = (
+            f"K/D <code>{escape(stats.kd_label)}</code>"
+            f"  ({stats.kills}/{stats.deaths})\n"
+            f"PMC <code>{stats.pmc_kills}</code> · стрик <code>{stats.longest_streak}</code>"
+        )
     return (
         f"<b>{escape(title)}</b>\n"
         f"{bar}  {_pct(stats.survival_rate)}\n"
         f"Рейды <code>{stats.raids}</code> · выжил <code>{stats.survived}</code>\n"
-        f"K/D <code>{escape(stats.kd_label)}</code>"
-        f"  ({stats.kills}/{stats.deaths})\n"
-        f"PMC <code>{stats.pmc_kills}</code> · стрик <code>{stats.longest_streak}</code>"
+        f"{kd_line}"
     )
 
 
@@ -114,7 +124,7 @@ def format_player_card(card: PlayerCard) -> str:
     if card.game_mode == ARENA and card.arena is not None:
         blocks.append(_arena_block(card.arena))
     else:
-        blocks.append(_raid_block("PMC", card.pmc))
+        blocks.append(_raid_block("PMC", card.pmc, pmc_kd=True))
         blocks.append(_raid_block("Scav", card.scav))
     return "\n\n".join(blocks)
 
@@ -142,24 +152,37 @@ def format_not_found(query: str, game_mode: str) -> str:
 
 def format_help(bot_username: str) -> str:
     mention = f"@{bot_username}" if bot_username else "@bot"
-    return (
-        "Я показываю статистику игрока Escape from Tarkov по нику.\n"
-        "По умолчанию — <b>сезонный персонаж</b>, если его нет — постоянный PVP.\n\n"
-        "<b>В группе</b>\n"
-        f"{escape(mention)} Nikita\n"
-        f"{escape(mention)} pvp Nikita\n"
-        f"{escape(mention)} pve Nikita\n"
-        f"{escape(mention)} arena Nikita\n\n"
-        "<b>Команды</b>\n"
-        "/player Nikita — сезон, иначе PVP\n"
-        "/season Nikita — только сезон\n"
-        "/pvp Nikita — постоянный PVP\n"
-        "/pve Nikita — PVE\n"
-        "/arena Nikita — Tarkov Arena\n\n"
-        "Кнопки под карточкой переключают режимы, которые есть у этого аккаунта.\n"
-        "В личке можно просто написать ник.\n"
-        "Данные: <a href=\"https://tarkov.dev/api/\">tarkov.dev</a>."
+    header = (
+        "<blockquote>"
+        "🎯 <b>EFT Scan</b>\n"
+        "<i>Статистика игрока Escape from Tarkov</i>"
+        "</blockquote>"
     )
+    intro = (
+        "По нику — карточка с <b>PMC K/D</b>, выживаемостью и портретом.\n"
+        "По умолчанию <b>сезонный персонаж</b>, если его нет — постоянный PVP."
+    )
+    group = (
+        "<b>В группе</b>\n"
+        f"<code>{escape(mention)} Nikita</code>\n"
+        f"<code>{escape(mention)} pvp Nikita</code>\n"
+        f"<code>{escape(mention)} pve Nikita</code>\n"
+        f"<code>{escape(mention)} arena Nikita</code>"
+    )
+    commands = (
+        "<b>Команды</b>\n"
+        "/player <code>Nikita</code> — сезон, иначе PVP\n"
+        "/season <code>Nikita</code> — только сезон\n"
+        "/pvp <code>Nikita</code> — постоянный PVP\n"
+        "/pve <code>Nikita</code> — PVE\n"
+        "/arena <code>Nikita</code> — Tarkov Arena"
+    )
+    tips = (
+        "В личке можно просто написать ник.\n"
+        "Кнопки под карточкой — только режимы, которые есть у аккаунта.\n"
+        'Данные: <a href="https://tarkov.dev/api/">tarkov.dev</a>.'
+    )
+    return "\n\n".join([header, intro, group, commands, tips])
 
 
 def format_need_nick(bot_username: str) -> str:

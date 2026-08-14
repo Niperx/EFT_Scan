@@ -6,6 +6,7 @@ import logging
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from eft_scan.client import TarkovClient
+from eft_scan.commands import BOT_COMMANDS
 from eft_scan.config import INDEX_REFRESH_SECONDS, Settings
 from eft_scan.handlers import help_command, mention_or_private, pick_player, player_command, start
 from eft_scan.webhook import ALLOWED_UPDATES, register_webhook, run_webhook
@@ -16,6 +17,11 @@ logger = logging.getLogger(__name__)
 async def _post_init(application: Application) -> None:
     client: TarkovClient = application.bot_data["tarkov"]
     asyncio.create_task(client.warmup(), name="tarkov-warmup")
+    try:
+        await application.bot.set_my_commands(list(BOT_COMMANDS))
+        logger.info("Меню команд обновлено (%s)", len(BOT_COMMANDS))
+    except Exception:
+        logger.exception("Не удалось установить команды бота")
     me = await application.bot.get_me()
     logger.info("Бот @%s готов", me.username)
 

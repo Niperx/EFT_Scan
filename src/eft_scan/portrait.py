@@ -13,6 +13,10 @@ from eft_scan.stats import PlayerCard
 
 IMAGEMAGIC_PLAYER = "https://imagemagic.tarkov.dev/player"
 
+# Компактнее в чате: больше места под текст карточки.
+PORTRAIT_MAX_SIDE = 420
+FALLBACK_SIZE = (640, 360)
+
 DEFAULT_USEC = {
     "head": "5cc084dd14c02e000b0550a3",
     "body": "5cc0858d14c02e000c6bea66",
@@ -95,41 +99,58 @@ def _accent(card: PlayerCard) -> tuple[int, int, int]:
     return _ACCENT_USEC
 
 
-def webp_to_jpeg(raw: bytes, *, quality: int = 85) -> bytes:
+def _fit_image(image, max_side: int = PORTRAIT_MAX_SIDE):
+    from PIL import Image
+
+    width, height = image.size
+    longest = max(width, height)
+    if longest <= max_side:
+        return image
+    scale = max_side / longest
+    new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    return image.resize(new_size, resample=Image.Resampling.LANCZOS)
+
+
+def image_to_jpeg(raw: bytes, *, quality: int = 82, max_side: int = PORTRAIT_MAX_SIDE) -> bytes:
     from PIL import Image
 
     image = Image.open(BytesIO(raw)).convert("RGB")
+    image = _fit_image(image, max_side=max_side)
     out = BytesIO()
     image.save(out, format="JPEG", quality=quality, optimize=True)
     return out.getvalue()
 
 
+def webp_to_jpeg(raw: bytes, *, quality: int = 82, max_side: int = PORTRAIT_MAX_SIDE) -> bytes:
+    return image_to_jpeg(raw, quality=quality, max_side=max_side)
+
+
 def render_fallback_card(card: PlayerCard) -> bytes:
     from PIL import Image, ImageDraw
 
-    width, height = 960, 540
+    width, height = FALLBACK_SIZE
     image = Image.new("RGB", (width, height), _BG)
     draw = ImageDraw.Draw(image)
     accent = _accent(card)
-    draw.rectangle((0, 0, 18, height), fill=accent)
-    draw.rounded_rectangle((48, 40, width - 40, height - 40), radius=18, fill=_PANEL)
+    draw.rectangle((0, 0, 12, height), fill=accent)
+    draw.rounded_rectangle((32, 28, width - 28, height - 28), radius=14, fill=_PANEL)
 
-    title_font = _load_font(42)
-    body_font = _load_font(26)
-    small_font = _load_font(22)
+    title_font = _load_font(30)
+    body_font = _load_font(20)
+    small_font = _load_font(17)
 
     meta = MODE_META.get(card.game_mode, {})
     mode_title = f"{meta.get('icon', '')} {meta.get('title', card.game_mode)}"
-    y = 70
-    draw.text((80, y), card.nickname, font=title_font, fill=_TEXT)
-    y += 58
+    y = 48
+    draw.text((54, y), card.nickname, font=title_font, fill=_TEXT)
+    y += 42
     subtitle = f"ур. {card.level} · {card.side}"
     if card.prestige:
         subtitle += f" · престиж {card.prestige}"
-    draw.text((80, y), subtitle, font=body_font, fill=accent)
-    y += 42
-    draw.text((80, y), mode_title, font=small_font, fill=_MUTED)
-    y += 50
+    draw.text((54, y), subtitle, font=body_font, fill=accent)
+    y += 32
+    draw.text((54, y), mode_title, font=small_font, fill=_MUTED)
+    y += 40
 
     if card.arena is not None:
         lines = [
@@ -139,17 +160,17 @@ def render_fallback_card(card: PlayerCard) -> bytes:
         ]
     else:
         lines = [
-            f"PMC  рейды {card.pmc.raids} · выжил {card.pmc.survived} · K/D {card.pmc.kd_label}",
-            f"Scav рейды {card.scav.raids} · выжил {card.scav.survived} · K/D {card.scav.kd_label}",
+            f"PMC K/D {card.pmc.pmc_kd_label} · рейды {card.pmc.raids} · выжил {card.pmc.survived}",
+            f"Scav K/D {card.scav.kd_label} · рейды {card.scav.raids}",
             f"В игре {card.hours_played} ч · ID {card.account_id}",
         ]
     for line in lines:
-        draw.text((80, y), line, font=body_font, fill=_TEXT)
-        y += 40
+        draw.text((54, y), line, font=body_font, fill=_TEXT)
+        y += 30
 
     if card.editions:
-        draw.text((80, height - 88), " · ".join(card.editions), font=small_font, fill=_MUTED)
+        draw.text((54, height - 58), " · ".join(card.editions), font=small_font, fill=_MUTED)
 
     out = BytesIO()
-    image.save(out, format="JPEG", quality=88, optimize=True)
+    image.save(out, format="JPEG", quality=85, optimize=True)
     return out.getvalue()
