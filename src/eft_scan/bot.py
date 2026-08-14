@@ -8,7 +8,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Mess
 from eft_scan.client import TarkovClient
 from eft_scan.config import INDEX_REFRESH_SECONDS, Settings
 from eft_scan.handlers import help_command, mention_or_private, pick_player, player_command, start
-from eft_scan.webhook import run_webhook
+from eft_scan.webhook import ALLOWED_UPDATES, register_webhook, run_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,20 @@ async def _refresh_indexes(context) -> None:
         logger.exception("Не удалось обновить индекс игроков")
 
 
+async def _ensure_webhook(context) -> None:
+    url = context.application.bot_data.get("webhook_url")
+    if not url:
+        return
+    try:
+        info = await context.bot.get_webhook_info()
+        if info.url == url:
+            return
+        logger.warning("Webhook сброшен (%r), ставлю снова %s", info.url, url)
+        await register_webhook(context.application, url)
+    except Exception:
+        logger.exception("Не удалось проверить webhook")
+
+
 def build_application(settings: Settings) -> Application:
     application = (
         Application.builder()
@@ -43,6 +57,8 @@ def build_application(settings: Settings) -> Application:
         .build()
     )
     application.bot_data["tarkov"] = TarkovClient(settings.cache_dir)
+    if settings.webhook_url:
+        application.bot_data["webhook_url"] = f"{settings.webhook_url}/telegram"
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler(["player", "pvp", "regular", "pve", "season"], player_command))
@@ -57,6 +73,13 @@ def build_application(settings: Settings) -> Application:
             first=INDEX_REFRESH_SECONDS,
             name="refresh-player-index",
         )
+        if settings.use_webhook:
+            application.job_queue.run_repeating(
+                _ensure_webhook,
+                interval=120,
+                first=20,
+                name="ensure-webhook",
+            )
     return application
 
 
@@ -65,6 +88,7 @@ def run() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         level=logging.INFO,
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     settings = Settings.from_env()
     application = build_application(settings)
     if settings.use_webhook:
@@ -72,4 +96,4 @@ def run() -> None:
         run_webhook(application, settings)
         return
     logger.info("Запускаю long polling")
-    application.run_polling(allowed_updates=["message", "callback_query"])
+    application.run_polling(allowed_updates=ALLOWED_UPDATES)
