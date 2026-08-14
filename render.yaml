@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: eft-scan
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: EFT_SCAN_CACHE_DIR
+        value: /app/.cache

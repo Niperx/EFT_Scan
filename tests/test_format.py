@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from eft_scan.format import format_help, format_not_found, format_player_card
+from eft_scan.stats import build_player_card, load_player_levels
+
+FIXTURE = Path(__file__).parent / "fixtures" / "profile.json"
+ARENA = Path(__file__).parent / "fixtures" / "arena.json"
+
+
+def test_format_player_card_contains_core_stats() -> None:
+    profile = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    card = build_player_card(profile, game_mode="regular", levels=load_player_levels())
+    text = format_player_card(card)
+    assert "PoeBwo-TTV" in text
+    assert "ур." in text
+    assert "престиж 6" in text
+    assert "Unheard" in text
+    assert "PMC K/D" in text
+    assert "2.30" in text
+    assert "6317" in text
+    assert "▰" in text
+    assert "<blockquote>" in text
+    assert "<code>" in text
+    assert "tarkov.dev" in text
+    assert "Постоянный PVP" in text
+    assert "2 достижения" in text
+    assert "9.46" not in text
+
+
+def test_format_season_and_fallback() -> None:
+    profile = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    season = build_player_card(profile, game_mode="pvp-season", levels=load_player_levels())
+    season_text = format_player_card(season)
+    assert "Сезонный персонаж" in season_text
+    assert "PVP Season" in season_text
+
+    fallback = build_player_card(
+        profile,
+        game_mode="regular",
+        levels=load_player_levels(),
+        is_fallback=True,
+    )
+    fallback_text = format_player_card(fallback)
+    assert "Сезонного профиля нет" in fallback_text
+    assert "постоянный PVP" in fallback_text
+
+
+def test_format_arena_card() -> None:
+    profile = json.loads(ARENA.read_text(encoding="utf-8"))
+    card = build_player_card(profile, game_mode="arena", levels=load_player_levels())
+    text = format_player_card(card)
+    assert "Tarkov Arena" in text
+    assert "Общий зачёт" in text
+    assert "2025" in text
+    assert "Last Hero" in text
+    assert "CheckPoint" in text
+    assert "PMC" not in text
+
+
+def test_format_not_found_and_help() -> None:
+    missing = format_not_found("NoSuchPlayer", "pve")
+    assert "NoSuchPlayer" in missing
+    assert "PVE" in missing
+    help_text = format_help("eft_scan_bot")
+    assert "@eft_scan_bot Nikita" in help_text
+    assert "/player" in help_text
+    assert "/arena" in help_text
+    assert "сезонный персонаж" in help_text
+    assert "<blockquote>" in help_text
+    assert "EFT Scan" in help_text
+    assert "PMC K/D" in help_text
